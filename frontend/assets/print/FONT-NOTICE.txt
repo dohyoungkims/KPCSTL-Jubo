@@ -1,0 +1,39 @@
+NanumSquare and KoPub font subsets are retained from the church-supplied source PDF for faithful document reproduction. They are not complete font distributions. Additional Hangul glyphs use the Droid Sans Fallback font distributed with PyMuPDF, under the Apache License 2.0. See https://www.apache.org/licenses/LICENSE-2.0 . Full original licensed fonts are still needed for exact matching of arbitrary new Korean text.
+
+
+Embedded font notices:
+
+regular:
+Copyright ®œ 2016 NAVER Corporation. All rights reserved. Font designed by Sandoll Communications Inc.
+NAVER Corporation
+Juseong-Park; Dokyung-Lee; Chorong-Kim; MinJae-Kang; Boomi-Park; Sang-a Kim;
+www.navercorp.com
+Copyright ⓒ 2016 NAVER Corporation. All rights reserved. Font designed by Sandoll Communications Inc.
+박주성; 이도경; 김초롱; 강민재; 박부미; 김상아;
+
+bold:
+Copyright ®œ 2016 NAVER Corporation. All rights reserved. Font designed by Sandoll Communications Inc.
+NAVER Corporation
+Juseong-Park; Dokyung-Lee; Chorong-Kim; MinJae-Kang; Boomi-Park; Sang-a Kim;
+www.navercorp.com
+Copyright ⓒ 2016 NAVER Corporation. All rights reserved. Font designed by Sandoll Communications Inc.
+박주성; 이도경; 김초롱; 강민재; 박부미; 김상아;
+
+extra:
+Copyright ®œ 2016 NAVER Corporation. All rights reserved. Font designed by Sandoll Communications Inc.
+NAVER Corporation
+Juseong-Park; Dokyung-Lee; Chorong-Kim; MinJae-Kang; Boomi-Park; Donghoon-Han; Sang-a Kim;
+www.navercorp.com
+Copyright ⓒ 2016 NAVER Corporation. All rights reserved. Font designed by Sandoll Communications Inc.
+박주성; 이도경; 김초롱; 강민재; 박부미; 한동훈; 김상아;
+
+worksheet:
+Copyright (c) 2018 Korea Publisher Society. All rights reserved. Font designed by FONTRIX Inc.
+Korea Publisher Society
+Park Yong-rak; Lee Sang-min; Kim Jung-jin; Park Han-ung; Kim Min-ju;
+Copyright (c) 2018 한국출판인회의. All rights reserved. Font designed by FONTRIX Inc.
+박용락; 이상민; 김정진; 박한웅; 김민주;
+한국출판인회의
+
+fallback:
+

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#314b61"><meta name="description" content="KPCSTL 주보 스튜디오: 교회 주보 편집, 모바일 검토, 주별 보관함을 위한 비공개 디자인 프로토타입.">
+  <title>KPCSTL · 주보 스튜디오</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">본문으로 이동</a>
+  <aside class="sidebar">
+    <a href="#editor" class="brand" data-view="editor"><span class="brandmark" aria-hidden="true">✦</span><span>KPCSTL<small>주보 스튜디오</small></span></a>
+    <div class="workspace-label">우리 교회의 한 주를 담다</div>
+    <nav aria-label="주 메뉴" id="desktop-nav"></nav>
+    <div class="sidebar-bottom"><div class="quiet-rule"></div><p>세인트루이스<br>한인장로교회</p><small>Korean Presbyterian Church<br>of St. Louis</small><button class="text-button" data-view="guide">이 프로토타입 안내 ↗</button></div>
+  </aside>
+  <div class="shell">
+    <header class="topbar"><a class="mobile-brand" href="#editor" data-view="editor">✦ KPCSTL</a><div class="breadcrumbs" id="breadcrumb">주보 / 편집</div><div class="topright"><span class="save-status" id="save-status" role="status">공유 주보 연결 중…</span><button class="avatar" id="profile-button" data-action="profile" aria-label="내 표시 이름">?</button></div></header>
+    <div class="prototype-banner"><span class="dot"></span><strong>함께 준비하는 주보</strong><span>편집자 · 변경 기록 · 담당별 진행 상황</span><button data-view="review">팀 진행 보기</button></div>
+    <div id="connection-banner" class="connection-banner" role="status" hidden></div>
+    <main id="main" tabindex="-1"></main>
+    <footer class="app-footer">KPCSTL 주보 스튜디오 <span>함께 준비하는 주일</span></footer>
+  </div>
+  <nav class="mobile-nav" aria-label="모바일 메뉴" id="mobile-nav"></nav>
+  <div class="toast" role="status" id="toast" hidden></div>
+  <dialog id="dialog"><div id="dialog-content"></div></dialog>
+  <script src="core.js"></script><script src="team-client.js"></script><script src="vendor/pdf-lib.min.js"></script><script src="print.js"></script><script src="print-view.js"></script><script src="app.js"></script>
+</body></html>

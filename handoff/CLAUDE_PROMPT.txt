@@ -1,0 +1,9 @@
+Continue from the completed v0.3 KPCSTL bulletin app in this folder. Read START_HERE.md, source/README.md, source/docs/HANDOFF.md and CLAUDE.md, then inspect the original PDF and fixed-area markup in references/.
+
+The named collaboration/progress feature is implemented: preserve display names tied to identity, shared storage, before/after audit history and timestamps, section assignments/completion, reopening on edits, coordinator approval of an exact version, final PDF exports and previous weekly/finalized snapshots. Do not restart the app or replace this with a mockup.
+
+First run the existing tests/build and verify the phone/desktop user flows in a real browser, including Korean typing, two concurrent users, name entry, section completion, final approval and PDF downloads. Keep my previous browser data recoverable. The service guide, staff information and marked table labels must remain fixed. Do not print internal collaboration records on the congregation's PDF.
+
+Before moving hosting, replace Sites-specific identity with verified authentication and provision persistent storage. The current workspace's external-invite restriction does not disappear by copying code. Ask for the app's JSON backup when I am ready to move the actual data. AI execution and public bulletin links remain future work.
+
+Keep me updated briefly roughly every two minutes while working. GitHub publishing can wait until I am ready; the intended repository is https://github.com/dohyoungkims/KPCSTL-Jubo.
