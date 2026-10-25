@@ -2,7 +2,7 @@
 
 ## Automated and build checks
 
-- 133 Node tests passed, including the existing 56-field/PDF boundary matrix and the new authentication, public projection, migration, conflict and session tests.
+- 136 Node tests passed, including the existing 56-field/PDF boundary matrix and the new authentication, public projection, migration, conflict and session tests.
 - Syntax checks, the original server build, GitHub Pages build and standalone Worker bundle passed.
 - A separate review found and fixed inherited task-key mutation and assignment to an inaccessible coordinator. Regression tests cover both, administrator recovery and rejection of forged administrator claims.
 
@@ -27,3 +27,9 @@ Twelve live checks passed with normal TLS verification: health, exact CORS, anon
 Only a temporary private fixture dated 2099-01-04 was created. Its issue and all three snapshots were removed using exact-ID/content guards; subsequent database counts confirmed zero remaining. Both test sessions were logged out. No fixture was finalized or made public.
 
 The detailed sanitized report is retained locally at `output/cloud-live-api-qa.json` (ignored by Git). Invitation codes and session tokens are excluded from reports and repository files.
+
+## Published browser migration and release integrity
+
+The first production Chrome check exposed a cached older `app.js` loading with the new bootstrap. The Pages build now places each release's scripts, transitive modules, styles and PDF assets under a shared content hash. Three build tests verify the complete module/asset graph and source/config invalidation. An older open page may need a refresh after a later deployment if its release assets are no longer hosted.
+
+The original browser draft was exported before recovery and remains intact. Its exact printable content, seven questions and eighteen history entries were restored to the cloud as version 2; the initial example's version 1 snapshot was retained. The restored bulletin remains a private draft. Private backups and verification reports are excluded from Git.
