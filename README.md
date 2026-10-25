@@ -2,6 +2,16 @@
 
 A Korean-first church bulletin editor for desktop and mobile. Version 0.3 adds persistent shared editing, named change history, per-section assignments and completion, and coordinator-approved PDF exports.
 
+## GitHub Pages app
+
+Open **https://dohyoungkims.github.io/KPCSTL-Jubo/**.
+
+The GitHub Pages edition opens without a ChatGPT account. It supports editing, progress tracking, weekly archives, PDF preview/download, and JSON backup. **Edits are saved only in the current browser; they do not sync between church members or devices.** Sharing the app URL does not share edited content. Download the PDF to distribute the completed bulletin. Clearing browser data may erase local drafts, so keep backups.
+
+The server-backed collaboration features described below remain in the source, but are not connected to the GitHub Pages edition. Online shared saving requires a separately hosted API, database, and verified authentication.
+
+`pnpm run build:pages` creates the static `.pages/` artifact. The GitHub Actions workflow tests the project, builds that artifact, and publishes it on pushes to `main`. Generated output is excluded from Git. See [docs/GITHUB_PAGES.md](docs/GITHUB_PAGES.md).
+
 ## Repository setup — October 24, 2026
 
 The complete supplied handoff has been unpacked into this repository. Run development commands from this folder: the archive's `source/` directory is now the repository root. Reference documents are in `references/`; original transfer notes and checksums are preserved in `handoff/`. See [handoff/README.md](handoff/README.md) for provenance and validation details.

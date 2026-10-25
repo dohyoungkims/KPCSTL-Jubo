@@ -29,5 +29,9 @@
     }
     return {changes:next,mapping,conflicts};
   }
-  return {areas,call,command,ready,initials,rebase};
+  async function getVersion(issueId,version){
+    const response=await fetch(`/api/team?issue=${encodeURIComponent(issueId)}&version=${Number(version)}`,{credentials:'same-origin',cache:'no-store'});
+    const data=await response.json();if(!response.ok)throw Error(data.error||'해당 기록을 찾을 수 없습니다.');return data;
+  }
+  return {areas,call,command,ready,initials,rebase,getVersion};
 });
