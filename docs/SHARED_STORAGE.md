@@ -4,9 +4,9 @@ The GitHub Pages frontend uses a Cloudflare Worker and D1 database for shared sa
 
 ## Using the app
 
-- **Church members:** open [the public bulletin](https://dohyoungkims.github.io/KPCSTL-Jubo/). No account is needed. Choose a date, read the bulletin, or use **인쇄 미리보기 / PDF 저장**. An empty database shows “아직 공개된 주보가 없습니다.”
-- **Editors:** open [the editor](https://dohyoungkims.github.io/KPCSTL-Jubo/studio.html) with a personal invitation link or enter the invitation code. Each editor should receive a separate named invitation. The ordinary public link contains no editor access.
-- **Administrator:** open the profile menu and choose **편집자 초대** to create a named editor link or revoke access. Copy a newly created link before closing its dialog; the server keeps only its hash and cannot show the code again.
+The owner selected **passwordless open editing** on October 24, 2026. Share only [the existing GitHub Pages address](https://dohyoungkims.github.io/KPCSTL-Jubo/). It opens the online editor immediately, without an invitation or sign-in. Anyone who has the address can read and edit the shared drafts. The three intended collaborators all use **주보 편집팀**, so edit history identifies the team rather than an individual. This is not a three-person permission restriction.
+
+The app's finalized-bulletin view is available through its navigation at `?view=published`; a separate URL does not need to be distributed. Administrator access remains protected by the existing private invitation/session mechanism. Existing personal invitations still work for recovery, but they are not required for ordinary editing.
 
 Text changes are sent about 700 ms after typing pauses, including after Korean text composition finishes. Wait for **공유 저장 완료** before assuming another device has the change. An open editor checks for other editors' changes about every eight seconds when visible and idle; it avoids replacing an active input, an open dialog, pending edits or a conflict review. Concurrent changes use version checks. Conflicting text requires comparison instead of silent overwriting.
 
@@ -14,15 +14,15 @@ Unsaved text has a recovery copy on that device. A network failure does not mean
 
 ## Publishing to church members
 
-Complete all six task areas, resolve outstanding change requests, and review the PDF for layout warnings. The issue's final coordinator chooses **확정하고 PDF 받기**. In shared mode, the confirmation explicitly states that this publishes the bulletin to the public link.
+Complete all six task areas, resolve outstanding change requests, and review the PDF for layout warnings. The issue's final coordinator chooses **확정하고 PDF 받기**. The confirmation explicitly states that this publishes the bulletin in the finalized-bulletin view. The common team is the current issue coordinator, so any open editor can complete this workflow.
 
-The public reader checks for updated finalized snapshots about every 30 seconds while visible, and on returning to the tab. It preserves the reader's selected archive date. This is periodic synchronization, so updates are not instantaneous. Public responses contain only printable content; team members, task state, comments, requests and edit history remain private. Editing a published issue creates a new draft while its previous finalized snapshot remains public until the next finalization.
+The public reader checks for updated finalized snapshots about every 30 seconds while visible, and on returning to the tab. It preserves the reader's selected archive date. This is periodic synchronization, so updates are not instantaneous. The finalized-reader API contains only printable content. In the current open-editing mode, drafts, task state, comments, requests and edit history are accessible through the editor; the reader is not an access-control boundary. Editing a published issue creates a new draft while its previous finalized snapshot remains public until the next finalization.
 
 The administrator can reassign a coordinator, including recovery when a former coordinator's access has expired. Administrator access alone does not permit finalization: the administrator must first be the issue's coordinator. Reassign all issues held by an editor before revoking that editor's access. Revoked or expired editors cannot receive new assignments.
 
 ## Bringing existing browser work online
 
-On first editor login, the app offers eligible drafts from that browser. Select the issues to transfer, or deliberately start with an example. Imported issues enter the online archive as drafts and must be reviewed before publication.
+When the shared archive is already populated, open editing goes directly to the online draft. The guide offers explicit transfer of eligible drafts from that browser. Select the issues to transfer, or deliberately start with an example. Imported issues enter the online archive as drafts and must be reviewed before publication.
 
 - The original `kpcstl.github-pages.v1:/KPCSTL-Jubo/` and `kpcstl.bulletin.study.v1` data stays intact. Pages drafts take precedence when both sources contain the same date.
 - An existing online issue with the same date is never overwritten. Compare it with the original local copy or backup and manually copy any needed content into the online editor.
@@ -59,15 +59,19 @@ Use the project root. The standalone configuration is `wrangler.shared.jsonc`; i
    pnpm exec wrangler d1 execute kpcstl-jubo --remote --config wrangler.shared.jsonc --file "work/access/GENERATED-ADMIN-FILE.sql"
    ```
 
-   `work/access/` is ignored by Git, has directory permissions `0700`, and its generated files use `0600`. Keep the JSON file private. Open the editor and enter its code, or construct the private editor URL with `#invite=CODE`. Do not put codes in query parameters, repository files, screenshots, logs or the public bulletin link. Additional normal editors are invited through the administrator UI.
+   `work/access/` is ignored by Git, has directory permissions `0700`, and its generated files use `0600`. Keep the JSON file private. Open the editor and enter its code, or construct the private editor URL with `#invite=CODE`. Do not put codes in query parameters, repository files, screenshots, logs or the public bulletin link. In invitation-only mode, additional named editors can be invited through the administrator UI. The current open mode does not require them.
 
-4. Verify the Worker URL returned by deployment. `/health` should respond successfully, `/api/public` should return an empty archive before publication, and `/api/team` must reject unauthenticated access. Test two independent authenticated editor sessions and a finalized public snapshot.
+4. For open editing, provision a non-admin common member in D1, set `OPEN_EDITING="true"` and `SHARED_EDITOR_ID` to that member in `wrangler.shared.jsonc`, and deploy. The configured member must be active. The deployed common identity has no distributed invitation code; its access record is retained until explicitly disabled. Assign existing issues to the common coordinator using the authenticated administrator before opening the workflow. Set frontend `openEditing: true` for the same release.
 
-5. Put only the verified Worker origin in `frontend/cloud-config.mjs`, run the repository tests and `pnpm run build:pages`, then publish through the GitHub Pages workflow. The frontend and Worker deploy independently. Verify the deployed GitHub URLs again; see [GITHUB_PAGES.md](GITHUB_PAGES.md).
+   Verify `/health`, anonymous `/api/session` and `/api/team`, and confirm `/api/access` still rejects anonymous requests. Invalid bearer credentials must fail instead of falling back to the common identity. Test two independent anonymous browsers and the finalized-reader projection. With `OPEN_EDITING` disabled, private team/session endpoints must reject anonymous requests as before.
+
+5. Put the verified Worker origin and non-secret access-mode flag in `frontend/cloud-config.mjs`, run the repository tests and `pnpm run build:pages`, then publish through the GitHub Pages workflow. The frontend and Worker deploy independently. Verify the deployed GitHub URLs again; see [GITHUB_PAGES.md](GITHUB_PAGES.md).
 
 The original Sites configuration, routes and `drizzle/` migrations remain separate. No Cloudflare account token or administrator invitation is needed in the public Pages build.
 
 ## Access lifetime and recovery
+
+Open editing does not depend on a device login or invitation expiry. It remains available while the Worker flag is enabled and the configured common member is active. To close access, disable `OPEN_EDITING`, set frontend `openEditing: false`, and redeploy both. Preserve the administrator account and existing issue history.
 
 Personal invitation codes last one year and can be reused on additional devices until revoked or expired. Each login creates a separate session lasting at most 30 days, capped by the invitation's expiry. Logout ends that device's session; revocation ends all sessions for that editor and disables their code. The editor identity belongs to the invitation, so sharing an invitation also shares its identity and permissions.
 

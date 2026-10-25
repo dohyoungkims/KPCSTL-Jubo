@@ -31,6 +31,15 @@ test('invitation login stores only session token and expiry in its scoped key',a
   assert.equal(calls[0].options.credentials,'omit');assert.equal(calls[0].options.redirect,'error');assert.equal(calls[0].options.referrerPolicy,'no-referrer');
 });
 
+test('open sharing discovers the server identity without a token and saves no credentials',async()=>{
+  const storage=memory();await session({storage}).login(code);const before=[...storage.values];let request;
+  const common={user:{id:'shared-editor',name:'주보 편집팀'},isAdmin:false,sharedEditing:true,expiresAt:null};
+  const auth=session({storage,fetch:async(url,options)=>{request={url,options};return response(common);}});
+  assert.deepEqual(await auth.shared(),common);assert.equal(request.url,base+'/api/session');assert.equal(Object.hasOwn(request.options.headers,'Authorization'),false);assert.deepEqual([...storage.values],before);
+  await assert.rejects(session({fetch:async()=>response(identity)}).shared(),error=>error.code==='INVALID_RESPONSE');
+  await assert.rejects(session({fetch:async()=>response({},401)}).shared(),error=>error.status===401);
+});
+
 test('session restore authenticates and is isolated across API and site directories',async()=>{
   const storage=memory();await session({storage}).login(code);
   let called=false;
@@ -147,11 +156,11 @@ test('invalid same-page invitations restore the editor controls without reloadin
   await handler();assert.equal(unlocked,true);assert.equal(error.message,'Invalid invitation');
 });
 
-async function cloudController({issues=[],seeds=[],failImport=false,isAdmin=false}={}){
+async function cloudController({issues=[],seeds=[],failImport=false,isAdmin=false,sharedEditing=false,extraMembers=[]}={}){
   const actor={id:'editor-1',name:'박태진 목사'},nodes=new Map(),handlers=new Map(),imports=[];let remoteIssues=B.clone(issues);
   const storage=memory();
   function node(id){if(!nodes.has(id))nodes.set(id,{id,innerHTML:'',textContent:'',value:'',style:{},hidden:false,disabled:false,open:false,showModal(){this.open=true;},close(){this.open=false;},addEventListener(){},querySelector(){return {disabled:false};}});return nodes.get(id);}
-  const client={...T,storageMode:'cloud',isAdmin,storageScope:base+'|'+directory,shareUrl:directory,loginUrl:directory+'studio.html',initialIssues:seeds,async call(command){if(!command)return {user:actor,profile:actor,members:[actor],issues:B.clone(remoteIssues)};if(command.op==='import'){imports.push(command.issue.id);if(failImport)throw Error('Offline');if(remoteIssues.some(i=>i.id===command.issue.id))throw Object.assign(Error('Already exists'),{status:409});remoteIssues.push(initializeIssue(command.issue,actor,new Date(now).toISOString()));return {issue:remoteIssues.at(-1)};}}};
+  const client={...T,storageMode:'cloud',isAdmin,sharedEditing,storageScope:base+'|'+directory,shareUrl:directory,loginUrl:directory+'studio.html',initialIssues:seeds,async call(command){if(!command)return {user:actor,profile:actor,members:[actor,...extraMembers],issues:B.clone(remoteIssues)};if(command.op==='import'){imports.push(command.issue.id);if(failImport)throw Error('Offline');if(remoteIssues.some(i=>i.id===command.issue.id))throw Object.assign(Error('Already exists'),{status:409});remoteIssues.push(initializeIssue(command.issue,actor,new Date(now).toISOString()));return {issue:remoteIssues.at(-1)};}}};
   const document={hidden:false,activeElement:null,querySelector:node,querySelectorAll:()=>[],addEventListener:(name,handler)=>handlers.set(name,handler)};
   const context={document,console,crypto,Map,Set,Date,JSON,Intl,Object,Array,String,Number,Promise,Error,URL,Blob,location:{hash:'',origin:'https://church.github.io'},navigator:{clipboard:{writeText:async()=>{}}},localStorage:storage,setTimeout(){},clearTimeout(){},setInterval(){},addEventListener(){},scrollTo(){},Bulletin:B,BulletinTeam:client,BulletinPrintView:{markup:()=>'',render(){}}};context.window=context;
   vm.runInNewContext(readFileSync(new URL('../frontend/app.js',import.meta.url),'utf8'),context);
@@ -183,4 +192,12 @@ test('admin can replace an unavailable coordinator without receiving a finalize 
   await h.handlers.get('click')({target:{dataset:{view:'review'},closest(){return this;}},preventDefault(){}});
   assert.match(h.node('#main').innerHTML,/id="coordinator-select"/);
   assert.doesNotMatch(h.node('#main').innerHTML,/data-action="finalize"/);
+});
+
+test('common editing shows fixed team information and only the common assignment choice',async()=>{
+  const current=initializeIssue(B.createStore().issues[0],{id:'editor-1',name:'주보 편집팀'},new Date(now).toISOString());
+  const h=await cloudController({issues:[current],sharedEditing:true,extraMembers:[{id:'private-admin',name:'관리자'}]});
+  const click=async dataset=>h.handlers.get('click')({target:{dataset,closest(){return this;}},preventDefault(){}});
+  await click({action:'profile'});assert.match(h.node('#dialog-content').innerHTML,/주보 편집팀/);assert.doesNotMatch(h.node('#dialog-content').innerHTML,/profile-form|data-action="logout"|data-action="manage-editors"/);
+  await click({view:'review'});assert.match(h.node('#main').innerHTML,/data-action="finalize"/);assert.doesNotMatch(h.node('#main').innerHTML,/<option value="private-admin"/);
 });

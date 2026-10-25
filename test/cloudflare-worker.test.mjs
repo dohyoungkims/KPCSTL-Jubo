@@ -41,6 +41,72 @@ test('anonymous requests and forged identity headers cannot read or mutate edito
   assert.deepEqual((await request(db,'/health',{origin:null})).data,{ok:true});
 });
 
+test('explicit open editing uses one server-verified non-admin identity across anonymous devices',async()=>{
+  const db=new LocalD1(),common=await access(db,'주보 편집팀','editor'),env={OPEN_EDITING:'true',SHARED_EDITOR_ID:common.id};
+  const session=await request(db,'/api/session',{env});
+  assert.equal(session.status,200);assert.deepEqual(session.data,{expiresAt:null,user:{id:common.id,name:common.name},isAdmin:false,sharedEditing:true});
+  assert.equal(session.headers.get('cache-control'),'no-store');
+  const imported=await request(db,'/api/team',{method:'POST',env,body:command('import',null,{issue:B.createStore().issues[0]})});assert.equal(imported.status,200);
+  const changed=await request(db,'/api/team',{method:'POST',env,body:command('fields',imported.data.issue,{changes:{'sermon.title':'같은 주보를 바로 편집'}})});assert.equal(changed.status,200);
+  assert.equal(changed.data.issue.history.at(-1).actorId,common.id);assert.equal(changed.data.issue.history.at(-1).actorName,common.name);
+  const other=await request(db,'/api/team',{env});assert.equal(other.status,200);assert.equal(other.data.user.id,common.id);assert.equal(other.data.issues[0].sermon.title,'같은 주보를 바로 편집');
+  assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM access_sessions').get().n,0);
+});
+
+test('open editing requires exact enabled configuration and an active editor record',async()=>{
+  const db=new LocalD1(),common=await access(db,'주보 편집팀','editor'),admin=await access(db,'관리자','admin');
+  for(const enabled of [undefined,false,true,'false','TRUE',''])assert.equal((await request(db,'/api/session',{env:{OPEN_EDITING:enabled,SHARED_EDITOR_ID:common.id}})).status,401);
+  for(const id of [undefined,'','editor_missing',admin.id])assert.equal((await request(db,'/api/session',{env:{OPEN_EDITING:'true',SHARED_EDITOR_ID:id}})).status,401);
+  const env={OPEN_EDITING:'true',SHARED_EDITOR_ID:common.id};
+  db.db.prepare('UPDATE editor_access SET revoked_at=? WHERE id=?').run(new Date(NOW).toISOString(),common.id);
+  assert.equal((await request(db,'/api/session',{env})).status,401);
+  assert.equal((await request(db,'/api/team',{method:'POST',env,body:{op:'profile',name:'No access'}})).status,401);
+  db.db.prepare('UPDATE editor_access SET revoked_at=NULL,expires_at=? WHERE id=?').run('1970-01-01T00:00:00.000Z',common.id);
+  assert.equal((await request(db,'/api/session',{env})).status,401);
+});
+
+test('open editing never falls back when any Authorization header is supplied',async()=>{
+  const {db,token}=await setup(),common=await access(db,'주보 편집팀','editor'),env={OPEN_EDITING:'true',SHARED_EDITOR_ID:common.id};
+  for(const authorization of ['', 'Bearer ', 'invalid', 'Bearer '+randomSecret('kpc_ses_')]){
+    assert.equal((await request(db,'/api/session',{env,headers:{Authorization:authorization}})).status,401);
+    assert.equal((await request(db,'/api/team',{env,headers:{Authorization:authorization}})).status,401);
+  }
+  assert.equal((await request(db,'/api/session',{env,token,now:NOW+SESSION_DURATION})).status,401);
+  assert.equal((await request(db,'/api/session',{env,token})).data.isAdmin,true);
+  assert.equal((await request(db,'/api/access',{env,token})).status,200);
+});
+
+test('open common identity cannot rename itself or acquire admin privileges from client claims',async()=>{
+  const {db,admin}=await setup(),common=await access(db,'주보 편집팀','editor'),env={OPEN_EDITING:'true',SHARED_EDITOR_ID:common.id};
+  const forged={'oai-authenticated-user-id':admin.id,'oai-authenticated-user-full-name':'Forged Administrator','x-is-admin':'true'};
+  const session=await request(db,'/api/session',{env,headers:forged});assert.equal(session.data.user.id,common.id);assert.equal(session.data.isAdmin,false);
+  const profile=await request(db,'/api/team',{method:'POST',env,headers:forged,body:{op:'profile',name:'Changed',isAdmin:true,isSharedEditor:false}});assert.equal(profile.status,403);
+  const commonToken=(await login(db,common.code)).data.token;
+  assert.equal((await request(db,'/api/team',{method:'POST',env,token:commonToken,body:{op:'profile',name:'Changed via code'}})).status,403);
+  assert.equal(db.db.prepare('SELECT name FROM members WHERE id=?').get(common.id).name,'주보 편집팀');
+  for(const method of ['GET','POST','DELETE'])assert.equal((await request(db,'/api/access'+(method==='DELETE'?'?id='+admin.id:''),{method,env,headers:forged,...(method==='POST'?{body:{name:'Created by public'}}:{})})).status,401);
+  assert.equal((await request(db,'/api/logout',{method:'POST',env})).status,401);
+  assert.equal((await request(db,'/api/login',{method:'POST',env,body:{code:'no code'}})).status,401);
+});
+
+test('open editing retains mutation origin checks and payload size bounds',async()=>{
+  const db=new LocalD1(),common=await access(db,'주보 편집팀','editor'),env={OPEN_EDITING:'true',SHARED_EDITOR_ID:common.id};
+  for(const origin of [null,'https://attacker.test'])assert.equal((await request(db,'/api/team',{method:'POST',env,origin,body:{op:'profile',name:'No'}})).status,403);
+  assert.equal((await request(db,'/api/team',{method:'POST',env,body:{op:'profile',name:'한'.repeat(700000)}})).status,413);
+  assert.equal(db.db.prepare('SELECT name FROM members WHERE id=?').get(common.id).name,'주보 편집팀');
+});
+
+test('common editor cannot transfer coordination away but authenticated admin retains management',async()=>{
+  const {db,admin,token}=await setup(),common=await access(db,'주보 편집팀','editor'),env={OPEN_EDITING:'true',SHARED_EDITOR_ID:common.id};
+  const imported=await request(db,'/api/team',{method:'POST',env,body:command('import',null,{issue:B.createStore().issues[0]})});assert.equal(imported.status,200);
+  const original=imported.data.issue;assert.equal(original.coordinatorId,common.id);
+  const blocked=await request(db,'/api/team',{method:'POST',env,body:command('coordinator',original,{memberId:admin.id})});assert.equal(blocked.status,403);
+  const after=(await request(db,'/api/team',{env})).data.issues[0];assert.deepEqual(after,original);
+  assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM issue_versions').get().n,1);
+  const self=await request(db,'/api/team',{method:'POST',env,body:command('coordinator',original,{memberId:common.id})});assert.equal(self.status,200);assert.equal(self.data.issue.coordinatorId,common.id);
+  const managed=await request(db,'/api/team',{method:'POST',env,token,body:command('coordinator',self.data.issue,{memberId:admin.id})});assert.equal(managed.status,200);assert.equal(managed.data.issue.coordinatorId,admin.id);assert.equal(managed.data.issue.activity.at(-1).actorId,admin.id);
+});
+
 test('codes contain 256 random bits and two devices obtain distinct hashed sessions for one identity',async()=>{
   const {db,admin,token}=await setup(),second=await login(db,admin.code);
   assert.match(admin.code,CODE_PATTERN);assert.equal(Buffer.from(admin.code.slice(8),'base64url').length,32);

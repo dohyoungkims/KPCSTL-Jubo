@@ -78,11 +78,12 @@ export function createCloudSession({apiBaseUrl,directory,storage,fetch:fetcher=g
   }
   function identity(data){
     if(!data.user||typeof data.user.id!=='string'||typeof data.user.name!=='string'||typeof data.isAdmin!=='boolean')throw fail('로그인 정보를 확인할 수 없습니다.','INVALID_RESPONSE');
-    return {user:{id:data.user.id,name:data.user.name},isAdmin:data.isAdmin,expiresAt:data.expiresAt};
+    return {user:{id:data.user.id,name:data.user.name},isAdmin:data.isAdmin,expiresAt:data.expiresAt,...(data.sharedEditing===true?{sharedEditing:true}:{})};
   }
   return Object.freeze({
     getToken,
     async restore(){if(!saved())return null;return identity(await request('/api/session'));},
+    async shared(){const data=await request('/api/session',{authenticated:false});if(data.sharedEditing!==true||data.isAdmin!==false||data.expiresAt!==null)throw fail('공유 편집 설정을 확인해 주세요.','INVALID_RESPONSE');return identity(data);},
     async login(code){
       if(typeof code!=='string'||!invitationPattern.test(code.trim()))throw fail('받으신 개인 초대 코드(kpc_inv_로 시작)를 입력해 주세요.','INVALID_INVITATION');
       const data=await request('/api/login',{method:'POST',body:{code:code.trim()},authenticated:false});

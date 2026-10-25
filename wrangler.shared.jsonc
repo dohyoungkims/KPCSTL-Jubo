@@ -7,7 +7,9 @@
   "workers_dev": true,
   "preview_urls": false,
   "vars": {
-    "FRONTEND_ORIGIN": "https://dohyoungkims.github.io"
+    "FRONTEND_ORIGIN": "https://dohyoungkims.github.io",
+    "OPEN_EDITING": "true",
+    "SHARED_EDITOR_ID": "editor_efcedcb7-5f0c-4c30-8d03-7172dce023da"
   },
   "d1_databases": [
     {

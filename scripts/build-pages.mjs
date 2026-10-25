@@ -23,6 +23,7 @@ export async function buildPages({
   source=fileURLToPath(new URL('../frontend/',import.meta.url)),
   domainFile=fileURLToPath(new URL('../lib/team-domain.mjs',import.meta.url)),
   apiBaseUrl=process.env.KPCSTL_API_BASE_URL ?? cloudConfig.apiBaseUrl,
+  openEditing=cloudConfig.openEditing===true,
   quiet=false,
 }={}){
   if(apiBaseUrl){
@@ -34,7 +35,7 @@ export async function buildPages({
   // Publish only browser assets. The server-backed build remains separate.
   await rm(output,{recursive:true,force:true});await mkdir(output,{recursive:true});
   await cp(source,output,{recursive:true});await rm(join(output,'package.json'));
-  await writeFile(join(output,'cloud-config.mjs'),'export default Object.freeze('+JSON.stringify({apiBaseUrl})+');\n');
+  await writeFile(join(output,'cloud-config.mjs'),'export default Object.freeze('+JSON.stringify({apiBaseUrl,openEditing:openEditing===true})+');\n');
   const domain=await readFile(domainFile,'utf8'),coreImport="import B from '../frontend/core.js';";
   if(!domain.startsWith(coreImport))throw Error('Review the browser domain adapter: core import changed.');
   await writeFile(join(output,'team-domain.browser.mjs'),domain.replace(coreImport,'const B=globalThis.Bulletin;'));
@@ -81,7 +82,7 @@ export async function buildPages({
   html=html.replace(/\b(src|href)="([^"]+)"/g,(match,attribute,value)=>assetFiles.has(value)?`${attribute}="${prefix}${value}"`:match)
     .replace('</head>',`<meta name="kpcstl-build" content="${revision}"></head>`);
   await writeFile(join(output,'index.html'),html);await writeFile(join(output,'studio.html'),html);
-  await writeFile(join(output,'build-info.json'),JSON.stringify({revision,apiBaseUrl})+'\n');
+  await writeFile(join(output,'build-info.json'),JSON.stringify({revision,apiBaseUrl,openEditing:openEditing===true})+'\n');
   await writeFile(join(output,'.nojekyll'),'');
   if(!quiet)console.log('GitHub Pages artifact prepared in .pages/ ('+(apiBaseUrl?'shared online storage':'browser-local saves')+', release '+revision+').');
   return {revision,prefix,output};

@@ -21,6 +21,23 @@ test('remote client validates required dependencies and bounded timeout',()=>{
   for(const timeoutMs of [0,-1,Infinity,NaN,120001,1.1,'15000'])assert.throws(()=>client({timeoutMs}),TypeError);
 });
 
+test('anonymous cloud requests require explicit opt-in and never include an Authorization header',async()=>{
+  const calls=[];
+  const api=T.createRemoteClient({baseUrl,allowAnonymous:true,fetch:async(url,options)=>{calls.push(options);return json({ok:true});}});
+  await api.call();await api.call({op:'fields'});await api.getVersion('2026-10-04',1);
+  for(const request of calls){assert.equal(Object.hasOwn(request.headers,'Authorization'),false);assert.equal(request.credentials,'omit');assert.equal(request.redirect,'error');}
+  assert.throws(()=>T.createRemoteClient({baseUrl,fetch:async()=>json({})}),TypeError);
+  assert.throws(()=>client({allowAnonymous:'true'}),TypeError);
+});
+
+test('anonymous opt-in never downgrades a supplied malformed token or authentication failure',async()=>{
+  let sent=false;
+  const api=client({allowAnonymous:true,getToken:async()=>{throw Error('Expired');},fetch:async()=>{sent=true;return json({});}});
+  await assert.rejects(api.call(),error=>error.status===401);
+  await assert.rejects(client({allowAnonymous:true,getToken:async()=>'bad token'}).call(),error=>error.status===401);
+  assert.equal(sent,false);
+});
+
 test('remote calls obtain fresh tokens for each read and write and never send cookies',async()=>{
   const requests=[];let token='first-token',lookups=0;
   const api=client({getToken:async()=>{lookups++;return token;},fetch:async(url,options)=>{requests.push({url,options});return json({saved:true});}});

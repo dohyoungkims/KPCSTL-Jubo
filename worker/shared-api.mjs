@@ -105,21 +105,34 @@ async function accessApi(request,db,session,now){
   return json({revoked:true,id});
 }
 
+async function sharedEditor(env,now){
+  // Open editing is an explicit deployment choice, never a client assertion.
+  const id=env.SHARED_EDITOR_ID;
+  if(env.OPEN_EDITING!=='true'||typeof id!=='string'||!id||id.length>120)return null;
+  const row=await env.DB.prepare(`SELECT a.id,a.role,a.expires_at AS expiresAt,a.revoked_at AS revokedAt,m.name
+    FROM editor_access AS a JOIN members AS m ON m.id=a.id WHERE a.id=?`).bind(id).first();
+  if(!validAccess(row,now)||row.role!=='editor')return null;
+  return {...row,sharedEditing:true,sessionExpiresAt:null};
+}
+
 async function route(request,env,allowed,now){
   const path=new URL(request.url).pathname;
   if(path==='/health')return json({ok:true});
   if(!env.DB)return json({error:UNAVAILABLE},503);
   if(path==='/api/public')return publicBulletinApi(request,env.DB);
   if(path==='/api/login')return login(request,env.DB,now);
-  const session=await authenticate(request,env.DB,now);
+  let session=await authenticate(request,env.DB,now);
+  // A supplied but invalid/expired token must remain a 401. Only an absent
+  // Authorization header may select the common, non-admin editor identity.
+  if(!session&&!request.headers.has('authorization')&&['/api/session','/api/team'].includes(path))session=await sharedEditor(env,now);
   if(!session)return json({error:'로그인이 필요합니다.'},401);
-  if(path==='/api/session')return json(sessionView(session));
+  if(path==='/api/session')return json({...sessionView(session),...(session.sharedEditing?{sharedEditing:true}:{})});
   if(path==='/api/logout'){
     await env.DB.prepare('UPDATE access_sessions SET revoked_at=? WHERE token_hash=?').bind(new Date(now).toISOString(),session.tokenHash).run();
     return json({loggedOut:true});
   }
   if(path==='/api/access')return accessApi(request,env.DB,session,now);
-  if(path==='/api/team')return teamApi(request,env.DB,{trustedUser:{id:session.id,name:session.name,email:'',isAdmin:session.role==='admin'},allowedOrigin:allowed});
+  if(path==='/api/team')return teamApi(request,env.DB,{trustedUser:{id:session.id,name:session.name,email:'',isAdmin:session.role==='admin',isSharedEditor:session.sharedEditing===true||(session.role==='editor'&&session.id===env.SHARED_EDITOR_ID)},allowedOrigin:allowed});
   return json({error:'Not found'},404);
 }
 

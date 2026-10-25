@@ -16,14 +16,14 @@ document.title='KPCSTL · 주일 주보';
 document.body.classList.add('public-page');
 document.body.innerHTML=`
   <a class="skip" href="#public-main">본문으로 이동</a>
-  <header class="public-masthead"><a class="public-brand" href="./"><span aria-hidden="true">✦</span><span>KPCSTL<small>세인트루이스 한인장로교회</small></span></a><a class="public-editor-link" href="studio.html">주보 편집 <span aria-hidden="true">↗</span></a></header>
+  <header class="public-masthead"><a class="public-brand" href="./"><span aria-hidden="true">✦</span><span>KPCSTL<small>세인트루이스 한인장로교회</small></span></a><a class="public-editor-link" href="${cloudConfig.openEditing?'./':'studio.html'}">주보 편집 <span aria-hidden="true">↗</span></a></header>
   <main id="public-main" tabindex="-1">
     <div class="public-intro"><div><p class="public-kicker">SUNDAY BULLETIN</p><h1>함께 예배하는 주일</h1><p>말씀과 교회 소식을 한곳에서 만나보세요.</p></div><label class="public-archive" hidden><span>지난 주보 보기</span><select id="public-archive" aria-label="주보 날짜 선택"></select></label></div>
     <div class="public-connection" role="status" aria-live="polite"><span id="public-status">공개된 주보를 불러오고 있습니다…</span><button class="public-refresh" type="button" data-public="refresh">새로고침</button></div>
     <div id="public-notice" role="status" hidden></div>
     <div id="public-content" aria-busy="true"><section class="public-empty"><span aria-hidden="true">✦</span><h2>주보를 불러오는 중입니다.</h2></section></div>
   </main>
-  <footer class="public-footer"><strong>세인트루이스 한인장로교회</strong><span>Korean Presbyterian Church of St. Louis</span><a href="studio.html">교역자 · 주보 편집</a></footer>`;
+  <footer class="public-footer"><strong>세인트루이스 한인장로교회</strong><span>Korean Presbyterian Church of St. Louis</span><a href="${cloudConfig.openEditing?'./':'studio.html'}">교역자 · 주보 편집</a></footer>`;
 const $=selector=>document.querySelector(selector);
 
 function issueMarkup(i){

@@ -34,7 +34,7 @@ test('all HTML entry points and their module graph share one content-addressed r
     }
   }
   for(const name of ['app.js','pages-bootstrap.mjs','pages-store.mjs','cloud-config.mjs','cloud-session.mjs','cloud-migration.mjs','public-view.js','vendor/pdf.min.mjs'])assert.ok(visited.has(prefix+name),name+' must be in the versioned graph');
-  const config=await readFile(join(output,prefix,'cloud-config.mjs'),'utf8');assert.ok(config.includes(apiBaseUrl));
+  const config=await readFile(join(output,prefix,'cloud-config.mjs'),'utf8');assert.ok(config.includes(apiBaseUrl));assert.match(config,/"openEditing":true/);
   const app=await readFile(join(output,prefix,'app.js'),'utf8');assert.match(app,/SHARED ONLINE WORKSPACE/);assert.match(app,/T\.initialIssues/);
 });
 
@@ -63,4 +63,6 @@ test('unchanged builds are deterministic and source/config changes invalidate th
   assert.equal(oldRefs.some(ref=>newRefs.includes(ref)),false,'every entry asset must change URL together');
   const local=await buildPages({source:copy,output:join(root,'local'),apiBaseUrl:'',quiet:true});assert.notEqual(changed.revision,local.revision);
   assert.match(await readFile(join(local.output,'studio.html'),'utf8'),/이 브라우저에 저장/);
+  const privateBuild=await buildPages({source:copy,output:join(root,'private'),apiBaseUrl,openEditing:false,quiet:true});assert.notEqual(changed.revision,privateBuild.revision);
+  assert.match(await readFile(join(privateBuild.output,privateBuild.prefix,'cloud-config.mjs'),'utf8'),/"openEditing":false/);
 });

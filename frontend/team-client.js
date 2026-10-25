@@ -14,7 +14,7 @@
   }
   // baseUrl is the complete team endpoint. It is fixed for this client so neither
   // commands nor version identifiers can redirect an editor's access token.
-  function createRemoteClient({baseUrl,getToken,fetch:fetcher=globalThis.fetch,timeoutMs=15000}={}){
+  function createRemoteClient({baseUrl,getToken,allowAnonymous=false,fetch:fetcher=globalThis.fetch,timeoutMs=15000}={}){
     let endpoint;
     try{
       if(typeof baseUrl!=='string'||/[\u0000-\u0020\u007f\\]/.test(baseUrl)||!/^https?:\/\//i.test(baseUrl))throw Error();
@@ -22,6 +22,8 @@
       const loopback=['localhost','127.0.0.1','[::1]'].includes(endpoint.hostname);
       if(!(endpoint.protocol==='https:'||(endpoint.protocol==='http:'&&loopback))||endpoint.username||endpoint.password||endpoint.search||endpoint.hash)throw Error();
     }catch{throw TypeError('공유 서버 주소는 HTTPS API 주소여야 합니다.');}
+    if(typeof allowAnonymous!=='boolean')throw TypeError('공유 접근 설정이 올바르지 않습니다.');
+    if(getToken===undefined&&allowAnonymous)getToken=()=>null;
     if(typeof getToken!=='function'||typeof fetcher!=='function')throw TypeError('공유 저장에는 로그인과 서버 연결 설정이 필요합니다.');
     if(!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>120000)throw TypeError('서버 대기 시간 설정이 올바르지 않습니다.');
     const failure=(message,code,details={})=>Object.assign(Error(message),{code,...details});
@@ -34,10 +36,11 @@
         let token;
         try{token=await getToken();}catch{throw authFailure();}
         if(controller.signal.aborted)throw failure('서버 응답 시간이 초과됐습니다. 다시 저장해 주세요.','TIMEOUT');
-        if(typeof token!=='string'||!token||!/^[-A-Za-z0-9._~+/]+=*$/.test(token))throw authFailure();
+        const anonymous=allowAnonymous&&(token===null||token===undefined||token==='');
+        if(!anonymous&&(typeof token!=='string'||!token||!/^[-A-Za-z0-9._~+/]+=*$/.test(token)))throw authFailure();
         let response;
         try{
-          response=await fetcher(url.href,{method:command?'POST':'GET',credentials:'omit',mode:'cors',redirect:'error',cache:'no-store',signal:controller.signal,headers:{Authorization:`Bearer ${token}`,Accept:'application/json',...(command?{'Content-Type':'application/json'}:{})},...(command?{body:JSON.stringify(command)}:{})});
+          response=await fetcher(url.href,{method:command?'POST':'GET',credentials:'omit',mode:'cors',redirect:'error',cache:'no-store',signal:controller.signal,headers:{...(!anonymous?{Authorization:`Bearer ${token}`}:{ }),Accept:'application/json',...(command?{'Content-Type':'application/json'}:{})},...(command?{body:JSON.stringify(command)}:{})});
         }catch{throw failure('공유 서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 다시 저장해 주세요.','NETWORK');}
         if(response.status===401)throw authFailure();
         if(response.status===403)throw failure('이 주보를 편집할 권한이 없습니다. 담당자에게 접근 권한을 요청해 주세요.','FORBIDDEN',{status:403});

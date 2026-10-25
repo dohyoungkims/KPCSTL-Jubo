@@ -1,38 +1,35 @@
 # GitHub Pages deployment
 
-Church members keep the same address: [KPCSTL 주일 주보](https://dohyoungkims.github.io/KPCSTL-Jubo/).
+Share one address: [KPCSTL 주보 스튜디오](https://dohyoungkims.github.io/KPCSTL-Jubo/).
 
-## Two storage modes
+## Current access mode
 
-`frontend/cloud-config.mjs` selects the Pages behavior. An empty `apiBaseUrl` keeps the original browser-local editor. A configured Cloudflare Worker origin enables the shared application:
+The owner explicitly selected passwordless editing on October 24, 2026. The root opens the shared online editor immediately. Anyone with the address can read and change drafts; there is no invitation, password, or three-person access limit. Changes use the common **주보 편집팀** identity, so they are not attributed to individual people. Administrator access remains separately authenticated.
 
-| Address | Shared mode |
+| Address | Current behavior |
 | --- | --- |
-| `/KPCSTL-Jubo/` | Public reader containing finalized bulletins only; no login required |
-| `/KPCSTL-Jubo/studio.html` | Private editor; requires a personal invitation code |
+| `/KPCSTL-Jubo/` | Shared editor; no sign-in required |
+| `/KPCSTL-Jubo/?view=published` | Finalized bulletin reader inside the same app |
+| `/KPCSTL-Jubo/studio.html` | Compatible editor entry for existing links |
 
-The public page does not read browser-local drafts or private team data. Saving an edit shares it with authenticated editors. Publishing it to church members requires finalization. The previous finalized bulletin stays public while its replacement is edited.
+All Share actions copy the clean root address. The finalized view shows only printable snapshots, but it is not a privacy boundary: anyone can return to the open editor and read drafts/history. Changes after finalization keep the previous final snapshot until the next finalization.
 
-See [Shared storage setup and use](SHARED_STORAGE.md) for the Cloudflare deployment, editor invitations, migration, and backups. A configured URL alone is not evidence that the live backend or Pages deployment has passed verification.
+`frontend/cloud-config.mjs` supplies the public `apiBaseUrl` and `openEditing` setting. The Worker independently requires `OPEN_EDITING="true"` and an active non-admin `SHARED_EDITOR_ID`. The browser never contains a shared credential. Invalid bearer tokens do not bypass authentication; administrator APIs never accept the common identity. Disabling public editing requires changing both the Worker and frontend settings and redeploying.
 
 ## Build and publish
 
-The `Deploy GitHub Pages` workflow in `.github/workflows/pages.yml` runs on `main` and can also be dispatched manually. It runs the Node test suite, builds `.pages/`, and deploys through GitHub's Pages artifact API. It deploys the frontend only; Cloudflare Worker code and database migrations have a separate deployment.
+The `Deploy GitHub Pages` workflow runs on pushes to `main`, tests the project, builds `.pages/`, and deploys the frontend. Deploy the Cloudflare Worker separately before publishing dependent frontend changes.
 
-Build locally with `pnpm run build:pages`, then serve `.pages/` with a static HTTP server. `KPCSTL_API_BASE_URL` can override the public API origin for a local build. The committed `frontend/cloud-config.mjs` supplies the origin to the GitHub workflow. Only that public origin belongs in the file; invitation codes, bearer tokens and Cloudflare credentials do not.
+Run `pnpm run build:pages` locally. `KPCSTL_API_BASE_URL` can override the API origin for testing. The generated release directory pins scripts, transitive modules, CSS, PDF workers, fonts and images to one content hash. An older open page may need a refresh after a subsequent deployment.
 
-The artifact contains browser assets, including the PDF template and fonts. It excludes server code, local secret files, database backups, repository archives and research documents. Hash navigation and relative links remain within the repository path.
+Only public configuration belongs in source. Never publish administrator invitations, bearer tokens, Cloudflare credentials, local backups, or database exports. The artifact contains browser assets only.
 
-For a shared release, deploy and verify the Worker first, then publish the Pages build pointing to it. Verify the public root, protected editor, two independent editor sessions, draft privacy, finalized publication and PDF output on the deployed URLs. A successful build is not a substitute for these live checks.
+Verify a fresh anonymous visit to the exact root URL, shared edits in both directions between independent browsers, conflict handling, administrator rejection, and PDF preview. A passing build alone does not establish live behavior.
 
-## Existing local data
+## Existing data and other modes
 
-Browser-local mode uses `kpcstl.github-pages.v1:/KPCSTL-Jubo/`. The legacy draft key is `kpcstl.bulletin.study.v1`. Shared mode offers an explicit transfer from these sources after editor login. It preserves both originals and never overwrites an online issue with the same date. See the migration section of [SHARED_STORAGE.md](SHARED_STORAGE.md).
+Browser-local keys remain intact: `kpcstl.github-pages.v1:/KPCSTL-Jubo/` and legacy `kpcstl.bulletin.study.v1`. Explicit transfer is available from the guide, preserves originals, and never overwrites an existing online date.
 
-When `apiBaseUrl` is empty, `/` and `/studio.html` still open the same browser-local workspace. Local names and timestamps are not authenticated identities. Local exports contain a `pagesBackup`; an uploaded-backup restore interface is not provided. Switching back to local mode does not download cloud edits or erase the database—it opens that device's separate local data.
+With a cloud API and `openEditing: false`, the original invitation-based mode remains available: root is the finalized reader and `studio.html` is the private editor. With an empty API URL, both entries use browser-local storage; this does not download cloud data or erase it.
 
-## Original server mode
-
-The original Sites server build remains separate and retains its platform authentication. The Pages build replaces `app.js` with `pages-bootstrap.mjs`; the normal server build does not. The standalone Worker supplies verified identities to the shared service rather than trusting client-supplied platform headers.
-
-`scripts/build-pages.mjs` also generates `team-domain.browser.mjs` from the shared domain source for local mode. Do not modify generated `.pages/` files or reuse the original Sites database migrations for the standalone Worker.
+The original Sites server build and platform authentication remain separate. Standalone database migrations live under `worker/migrations/`, not `drizzle/`. See [Shared storage setup and use](SHARED_STORAGE.md).
