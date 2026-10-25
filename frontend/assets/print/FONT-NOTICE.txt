@@ -1,5 +1,27 @@
-NanumSquare and KoPub font subsets are retained from the church-supplied source PDF for faithful document reproduction. They are not complete font distributions. Additional Hangul glyphs use the Droid Sans Fallback font distributed with PyMuPDF, under the Apache License 2.0. See https://www.apache.org/licenses/LICENSE-2.0 . Full original licensed fonts are still needed for exact matching of arbitrary new Korean text.
+NanumSquare Regular, Bold and ExtraBold are complete, unmodified original NAVER
+font files (version 1.000), replacing the limited subsets in the supplied PDF.
+Their metrics match the source PDF for every previously embedded character.
+Copyright (c) 2016 NAVER Corporation. Font designed by Sandoll Communications Inc.
+Distributed under the SIL Open Font License 1.1; see NanumSquare-LICENSE.txt.
+Official source: https://hangeul.naver.com/hangeul_static/webfont/zips/nanum-square.zip
+License: https://help.naver.com/service/30016/contents/18088?osType=PC&lang=ko
 
+The complete NanumSquare files contain 2,479 visible modern Hangul syllables.
+Other mapped Hangul entries have empty outlines. Generated font-metrics.json
+excludes empty glyphs (except whitespace) so unsupported syllables use a visible
+fallback instead of disappearing. The font files themselves are not modified.
+
+The KoPubWorld Dotum Bold worksheet subset remains from the church-supplied PDF.
+It contains only the original document's characters. New worksheet text may use
+NanumSquare or the fallback; exact KoPub typography for arbitrary input is not
+claimed. The full KoPubWorld font is not bundled in this release.
+
+Additional Hangul glyphs use the Droid Sans Fallback font distributed with
+PyMuPDF under Apache License 2.0; see Apache-LICENSE.txt and
+https://www.apache.org/licenses/LICENSE-2.0 . Its appearance differs from the
+original fonts. Characters absent from all bundled fonts produce a blocking
+validation warning. NFC Korean and Latin text are supported; complex-script
+shaping and color emoji are not supported by the PDF renderer.
 
 Embedded font notices:
 

@@ -18,4 +18,4 @@ The original server-backed mode is retained. `frontend/pages-bootstrap.mjs` inst
 
 ## Verification
 
-The 50-test suite covers the existing shared backend and PDF behavior plus 14 browser-storage cases: reload persistence, device/path isolation, stale writes, concurrent commands, storage failures, idempotence, finalized snapshots, archive preservation, profile continuity, corruption, and defensive copying. Local browser checks confirmed name entry, editing, saving across reload, and four-page PDF preview under the repository subpath.
+The 64-test suite covers the existing shared backend and PDF behavior plus 14 browser-storage cases: reload persistence, device/path isolation, stale writes, concurrent commands, storage failures, idempotence, finalized snapshots, archive preservation, profile continuity, corruption, and defensive copying. Local browser checks confirmed name entry, editing, saving across reload, and four-page PDF preview under the repository subpath.

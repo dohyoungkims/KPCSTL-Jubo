@@ -15,18 +15,38 @@
       italicAngle:0,xHeight:m.unitsPerEm/2,post:{isFixedPitch:false},head:{macStyle:{italic:false}},
       glyphForCodePoint:glyph,layout:text=>({glyphs:Array.from(text,c=>glyph(c.codePointAt(0)))})};
   }
+  // The advance width is not the ink boundary: e.g. j and accented fallback
+  // glyphs can extend outside their advance. Read the embedded TrueType outlines
+  // so wrapping and baseline placement use the same glyphs as the exported PDF.
+  function glyphBounds(bytes,metrics){
+    const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),tables={};
+    for(let n=0;n<view.getUint16(4);n++){
+      const at=12+n*16,tag=String.fromCharCode(...bytes.slice(at,at+4));
+      tables[tag]=view.getUint32(at+8);
+    }
+    if(!tables.glyf||!tables.loca||!tables.head)return metrics.widths.map(()=>metrics.bbox);
+    const long=view.getInt16(tables.head+50)===1;
+    const offset=n=>long?view.getUint32(tables.loca+n*4):view.getUint16(tables.loca+n*2)*2;
+    return metrics.widths.map((_,n)=>{
+      const begin=offset(n),end=offset(n+1);
+      if(begin===end)return null;
+      const at=tables.glyf+begin;
+      return {minX:view.getInt16(at+2),minY:view.getInt16(at+4),maxX:view.getInt16(at+6),maxY:view.getInt16(at+8)};
+    });
+  }
   async function generate(issue,options={}){
     const L=options.PDFLib||globalThis.PDFLib,read=options.load||fetchBytes;
     if(!L)throw Error('PDF 도구를 불러오지 못했습니다. 새로고침해 주세요.');
     const [template,metricsBytes]=await Promise.all([read('assets/print/template.pdf'),read('assets/print/font-metrics.json')]);
     const metrics=JSON.parse(new TextDecoder().decode(metricsBytes));
-    const doc=await L.PDFDocument.load(template),pages=doc.getPages(),fonts={};
+    const doc=await L.PDFDocument.load(template),pages=doc.getPages(),fonts={},outlines={};
     const fontBytes=await Promise.all(Object.values(metrics).map(m=>read(m.url)));
     for(const [n,m]of Object.values(metrics).entries()){
+      outlines[m.id]=glyphBounds(fontBytes[n],m);
       doc.registerFontkit({create:()=>fontAdapter(m)});
       fonts[m.id]=await doc.embedFont(fontBytes[n],{subset:false,customName:'KPCSTL-'+m.id});
     }
-    const warnings=[],seen=new Set(),fallbackChars=new Set();
+    const warnings=[],layout=[],seen=new Set(),fallbackChars=new Set();
     const ink=L.rgb(.08,.09,.1),navy=L.rgb(.21,.30,.38),gray=L.rgb(.84,.85,.85),white=L.rgb(1,1,1),red=L.rgb(.75,.12,.16);
     const warn=(id,label,section,message,blocking=true)=>{const key=id+message;if(!seen.has(key)){seen.add(key);warnings.push({id,label,section,message,blocking});}};
     function fontFor(c,preferred,region){
@@ -42,39 +62,69 @@
       for(const c of text){let f=fontFor(c,font,region),ch=metrics[f].cmap[c.codePointAt(0)]?c:'?';const last=result.at(-1);if(last&&last.font===f)last.text+=ch;else result.push({font:f,text:ch});}
       return result;
     }
-    const measure=(text,font,size,region)=>runs(text,font,region).reduce((a,r)=>a+fonts[r.font].widthOfTextAtSize(r.text,size),0);
+    function measure(text,font,size,region){
+      let advance=0,left=0,right=0,ascent=0,descent=0;
+      for(const run of runs(text,font,region))for(const c of run.text){
+        const m=metrics[run.font],id=m.cmap[c.codePointAt(0)]||0,b=outlines[run.font][id],scale=size/m.unitsPerEm;
+        if(b){left=Math.min(left,advance+b.minX*scale);right=Math.max(right,advance+b.maxX*scale);ascent=Math.max(ascent,b.maxY*scale);descent=Math.max(descent,-b.minY*scale);}
+        advance+=m.widths[id]*scale;
+      }
+      return {advance,left,right,ascent,descent,width:Math.max(advance,right)-left};
+    }
     function wrap(text,width,font,size,region){
       const lines=[];
       for(const paragraph of normalize(text).split('\n')){
-        let line='';
-        for(const c of paragraph){
-          if(line&&measure(line+c,font,size,region)>width){
-            const space=line.lastIndexOf(' ');
-            if(space>0&&space>line.length*.45){lines.push(line.slice(0,space));line=line.slice(space+1)+c;}
-            else {lines.push(line.trimEnd());line=c===' '?'':c;}
-          }else line+=c;
+        let pending=Array.from(paragraph),line='';
+        while(pending.length){
+          const c=pending.shift(),candidate=line+c;
+          if(measure(candidate,font,size,region).width<=width){line=candidate;continue;}
+          if(!line){
+            warn(region.id,region.label,region.section,'문자 한 개가 인쇄 칸의 너비보다 큽니다. 내용을 확인해 주세요.');
+            lines.push(c);continue;
+          }
+          const space=line.lastIndexOf(' ');
+          if(space>0&&space>line.length*.45){
+            lines.push(line.slice(0,space).trimEnd());
+            // Re-check the remainder, too: a narrow prefix and wide suffix can
+            // otherwise leave an overwide line after breaking at a space.
+            pending=[...Array.from(line.slice(space+1)),c,...pending];line='';
+          }else{lines.push(line.trimEnd());line='';if(c!==' ')pending.unshift(c);}
         }
         lines.push(line.trimEnd());
       }
       return lines;
     }
-    function line(page,text,x,top,font,size,region,color=ink){
+    function block(text,width,font,size,region,requestedLeading){
+      const lines=wrap(text,width,font,size,region),bounds=lines.map(t=>measure(t,font,size,region));
+      const ascent=Math.max(size*.86,...bounds.map(b=>b.ascent)),descent=Math.max(size*.14,...bounds.map(b=>b.descent));
+      const leading=Math.max(requestedLeading,ascent+descent);
+      return {lines,ascent,leading,height:lines.length*leading};
+    }
+    function line(page,text,x,top,font,size,region,color=ink,geometry={}){
+      const m=measure(text,font,size,region),ascent=geometry.ascent??Math.max(size*.86,m.ascent),area=geometry.area;
+      if(area)x=Math.max(area.left-m.left,Math.min(x,area.right-Math.max(m.advance,m.right)));
+      const baseline=top+ascent,bounds={left:x+m.left,top:baseline-m.ascent,right:x+m.right,bottom:baseline+m.descent};
+      if(text&&area&&(bounds.left<area.left-.001||bounds.right>area.right+.001||bounds.top<area.top-.001||bounds.bottom>area.bottom+.001)){
+        warn(region.id,region.label,region.section,region.label+' 글자가 인쇄 칸의 경계를 넘습니다. 내용을 줄이거나 확인해 주세요.');
+        return;
+      }
+      if(text)layout.push({...region,page:pages.indexOf(page)+1,text,x,top,font,size,bounds,region:area||{left:0,top:0,right:612,bottom:792}});
       for(const run of runs(text,font,region)){
-        page.drawText(run.text,{x,y:792-top-size*.86,font:fonts[run.font],size,color});
+        page.drawText(run.text,{x,y:792-baseline,font:fonts[run.font],size,color});
         x+=fonts[run.font].widthOfTextAtSize(run.text,size);
       }
     }
     function rect(page,x,y,w,h,color,borderColor,borderWidth=0){page.drawRectangle({x,y:792-y-h,width:w,height:h,...(color?{color}:{}),...(borderColor?{borderColor,borderWidth}:{})});}
     const rule=(page,x,y,w,color=ink,width=.6)=>page.drawLine({start:{x,y:792-y},end:{x:x+w,y:792-y},thickness:width,color});
     function region(page,id,label,section,x,y,w,h,text,opts={}){
-      const r={id,label,section},font=opts.font||'regular',size=opts.size||9.96,leading=opts.leading||size*1.36,pad=opts.pad??4;
-      const lines=wrap(text,w-pad*2,font,size,r),needed=lines.length*leading;
-      const capacity=Math.max(0,Math.floor((h-pad*2)/leading));
+      const r={id,label,section},font=opts.font||'regular',size=opts.size||9.96,pad=opts.pad??4;
+      const {lines,ascent,leading,height:needed}=block(text,w-pad*2,font,size,r,opts.leading||size*1.36);
+      const capacity=Math.max(0,Math.floor((h-pad*2+.000001)/leading));
       if(lines.length>capacity){warn(id,label,section,`${label} 내용이 인쇄 칸을 넘습니다. ${lines.length}줄 중 ${capacity}줄까지 들어갑니다.`);}
-      const start=y+pad+(opts.valign==='middle'?Math.max(0,(h-pad*2-needed)/2):0);
+      const start=y+pad+(opts.valign==='middle'?Math.max(0,(h-pad*2-needed)/2):0),area={left:x+pad,top:y+pad,right:x+w-pad,bottom:y+h-pad};
       for(const [n,t]of lines.slice(0,capacity).entries()){
-        const tw=measure(t,font,size,r),xpos=opts.align==='center'?x+(w-tw)/2:opts.align==='right'?x+w-pad-tw:x+pad;
-        line(page,t,xpos,start+n*leading,font,size,r,opts.color||ink);
+        const tw=measure(t,font,size,r).advance,xpos=opts.align==='center'?x+(w-tw)/2:opts.align==='right'?x+w-pad-tw:x+pad;
+        line(page,t,xpos,start+n*leading,font,size,r,opts.color||ink,{ascent,area});
       }
       if(lines.length>capacity)rect(page,x,y,w,h,null,red,1.4);
       return needed;
@@ -117,12 +167,13 @@
     let col=0,top=79;
     for(const [n,a]of i.announcements.entries()){
       const r={id:'announcements',label:'교회 소식',section:'announcements'},title=`${n+1}. ${a.title}`,width=173,size=9.5;
-      const tl=wrap(title,width,'bold',size,r),bl=wrap(a.body,width,'regular',size,r),height=(tl.length+bl.length)*12.4+8;
+      const tl=block(title,width,'bold',size,r,12.4),bl=block(a.body,width,'regular',size,r,12.4),height=tl.height+bl.height+8;
       if(top+height>(col===0?612:549)&&col===0){col=1;top=79;}
       const bottom=col===0?612:549,x=col===0?50:231;
       if(top+height>bottom){warn('announcements','교회 소식','announcements','교회 소식이 두 단의 인쇄 공간을 넘습니다. 내용을 줄이거나 항목을 정리해 주세요.');rect(p2,x,75,177,bottom-75,null,red,1.4);break;}
-      for(const t of tl){line(p2,t,x,top,'bold',size,r);top+=12.4;}
-      for(const t of bl){line(p2,t,x,top,'regular',size,r);top+=12.4;}
+      const area={left:x,top:79,right:x+width,bottom};
+      for(const t of tl.lines){line(p2,t,x,top,'bold',size,r,ink,{ascent:tl.ascent,area});top+=tl.leading;}
+      for(const t of bl.lines){line(p2,t,x,top,'regular',size,r,ink,{ascent:bl.ascent,area});top+=bl.leading;}
       top+=8;
     }
     // Staff information and its original typography remain in the template.
@@ -153,7 +204,7 @@
       let y=start;
       for(const q of qs){
         const r={id:'questions',label:'설교 질문',section:'questions'},text=q.number+'. '+q.body;
-        const height=wrap(text,526,'worksheet',11.6,r).length*16+8;
+        const height=block(text,526,'worksheet',11.6,r,16).height+8;
         if(y+height>bottom){warn('questions','설교 질문','questions','설교 질문이 4쪽 안에 들어가지 않습니다. 질문의 수나 길이를 줄여 주세요.');rect(page,39,start,534,bottom-start,null,red,1.4);break;}
         region(page,'questions','설교 질문','questions',39,y,534,height,text,{font:'worksheet',size:11.6,leading:16,pad:4});
         y+=Math.max(height+24,gap);
@@ -169,7 +220,7 @@
     doc.setTitle(`KPCSTL ${i.date} v${i.revision}`);doc.setSubject(exportable?'Edited church bulletin':'Layout preview — resolve warnings before export');
     doc.setAuthor('Korean Presbyterian Church of St. Louis');doc.setCreator('KPCSTL Bulletin Studio');
     const bytes=await doc.save();
-    return {bytes,warnings,exportable,filename:`KPCSTL-${i.date}-v${i.revision}.pdf`,revision:i.revision,date:i.date,pages:4};
+    return {bytes,warnings,layout,exportable,filename:`KPCSTL-${i.date}-v${i.revision}.pdf`,revision:i.revision,date:i.date,pages:4};
   }
   return {generate,normalize,fontAdapter};
 });

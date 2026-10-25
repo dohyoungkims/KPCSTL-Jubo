@@ -54,3 +54,6 @@ yarn-error.log*
 
 public/
 .pages/
+
+# Local PDF review deliverables
+/output/

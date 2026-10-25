@@ -3,6 +3,8 @@
 'use strict';
 const B=window.Bulletin,T=window.BulletinTeam,KEY='kpcstl.bulletin.study.v1';
 const localOnly=T.storageMode==='local';
+const selectionKey=localOnly?'kpcstl.github-pages.current.v1:'+new URL('.',T.shareUrl||location.href).pathname:null;
+let restoreSelection=localOnly;
 const wording=(shared,local)=>localOnly?local:shared;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -23,12 +25,25 @@ const btn=(label,action,cls='',ic='')=>`<button class="btn ${cls}" data-action="
 function toast(message){clearTimeout(toastTimer);$('#toast').textContent=message;$('#toast').hidden=false;toastTimer=setTimeout(()=>$('#toast').hidden=true,4500);}
 function status(t,failed=false){$('#save-status').textContent=t;$('#save-status').style.color=failed?'#a7473f':'';}
 function updateIssue(next){const idx=store.issues.findIndex(i=>i.id===next.id);if(idx<0)store.issues.push(next);else store.issues[idx]=next;}
+function selectIssue(id){
+ if(!store.issues.some(i=>i.id===id))return false;
+ store.current=id;
+ if(localOnly)try{localStorage.setItem(selectionKey,id);}catch{toast('현재 주보 선택을 저장하지 못했습니다. 주보 내용의 저장 상태를 확인해 주세요.');}
+ return true;
+}
 function recoveryKey(){return profile?'kpcstl.pending.'+profile.id+'.'+store.current:null;}
 function persistPending(){try{const key=recoveryKey();if(key){if(pending.size)localStorage.setItem(key,JSON.stringify({baseVersion:issue().version,baseIssue:issue(),changes:Object.fromEntries(pending)}));else localStorage.removeItem(key);}}catch{status('기기 복구 저장 실패',true);}}
 function notifyConnection(message='',bad=false){const el=$('#connection-banner');el.hidden=!message;el.className='connection-banner'+(bad?' connection-error':'');el.textContent=message;}
 function applyShared(data){
  signedUser=data.user;profile=data.profile;members=data.members;
- if(data.issues.length){store.issues=data.issues;if(!store.issues.some(i=>i.id===store.current))store.current=store.issues[0].id;}
+ if(data.issues.length){
+  store.issues=data.issues;
+  if(restoreSelection){
+   try{const selected=localStorage.getItem(selectionKey);if(store.issues.some(i=>i.id===selected))store.current=selected;}catch{}
+   restoreSelection=false;
+  }
+  if(!store.issues.some(i=>i.id===store.current))store.current=store.issues[0].id;
+ }
  connected=true;initialized=!!data.issues.length;status(wording('공유 저장소에 연결됨','이 브라우저에 저장됨'));
  const b=$('#profile-button');b.textContent=T.initials(profile?.name);b.title=profile?.name||'표시 이름 등록';
 }
@@ -41,7 +56,7 @@ async function mutation(op,args={}){
  catch(e){if(e.current){updateIssue(e.current);render();}connected=e.status?true:false;status('저장 확인 필요',true);toast(e.message);return null;}
  finally{setBusy(false);}
 }
-function showProfile(){showDialog(`<h2>어떤 이름으로 편집할까요?</h2><p>${wording('이 이름이 변경 기록과 담당자 목록에 표시됩니다. 로그인한 계정에 연결됩니다.','이 이름은 이 브라우저의 변경 기록에만 표시됩니다. 로그인이나 다른 기기와의 공유는 없습니다.')}</p><form id="profile-form"><label class="field"><span>표시 이름</span><input id="display-name" maxlength="60" required autocomplete="name" value="${esc(profile?.name||signedUser?.name||'')}"></label><p class="field-help">예: 김도영 장로 · 이름은 나중에 바꿀 수 있습니다.</p><div id="profile-error" class="dialog-error" role="alert"></div><button class="btn primary" type="submit">${profile?'이름 저장':'이 이름으로 시작하기'}</button>${profile?btn('취소','close-dialog',''):''}</form>`);}
+function showProfile(){showDialog(`<h2>어떤 이름으로 편집할까요?</h2><p>${wording('이 이름이 변경 기록과 담당자 목록에 표시됩니다. 로그인한 계정에 연결됩니다.','이 이름은 이 브라우저의 변경 기록에만 표시됩니다. 로그인이나 다른 기기와의 공유는 없습니다.')}</p><form id="profile-form"><label class="field"><span>표시 이름</span><input id="display-name" maxlength="60" required autocomplete="name" value="${esc(profile?.name||signedUser?.name||'')}"></label><p class="field-help">예: 박태진 목사 · 이름은 나중에 바꿀 수 있습니다.</p><div id="profile-error" class="dialog-error" role="alert"></div><button class="btn primary" type="submit">${profile?'이름 저장':'이 이름으로 시작하기'}</button>${profile?btn('취소','close-dialog',''):''}</form>`);}
 async function initializeShared(){
  const data=await T.call();applyShared(data);
  if(!profile){render();showProfile();return;}
@@ -179,7 +194,7 @@ document.addEventListener('click',async e=>{
  if(t.dataset.section){if(!await flush())return;section=t.dataset.section;render();return;}
  if(t.dataset.preview){if(!await flush())return;previewMode=t.dataset.preview;render();return;}
  if(t.dataset.editSection){if(!await flush())return;section=t.dataset.editSection;await navigate('editor');return;}
- if(t.dataset.open){if(!await flush())return;store.current=t.dataset.open;await navigate(t.dataset.openView);restorePending();return;}
+ if(t.dataset.open){if(!await flush())return;if(!selectIssue(t.dataset.open))return;await navigate(t.dataset.openView);restorePending();return;}
  if(t.dataset.actor){actorFilter=actorFilter===t.dataset.actor?'all':t.dataset.actor;render();return;}
  if(!await flush())return;
  if(t.dataset.taskSection){await mutation('task',{section:t.dataset.taskSection,status:t.dataset.taskStatus});render();return;}
@@ -218,7 +233,7 @@ document.addEventListener('click',async e=>{
 });
 document.addEventListener('submit',async e=>{
  if(e.target.id==='profile-form'){e.preventDefault();const button=e.target.querySelector('button[type="submit"]');button.disabled=true;try{const result=await T.call({op:'profile',name:$('#display-name').value});profile=result.profile;members=result.members;$('#dialog').close();await initializeShared();}catch(err){$('#profile-error').textContent=err.message;}finally{button.disabled=false;}}
- if(e.target.id==='new-week-form'){e.preventDefault();const next=await mutation('new-week',{date:$('#new-date').value});if(next){store.current=next.id;$('#dialog').close();section='sermon';await navigate('editor');toast('이전 주를 보존하고 새 주보를 만들었습니다. 담당과 날짜를 확인해 주세요.');}else $('#new-error').textContent='새 주보를 만들지 못했습니다. 날짜와 연결 상태를 확인해 주세요.';}
+ if(e.target.id==='new-week-form'){e.preventDefault();const next=await mutation('new-week',{date:$('#new-date').value});if(next){selectIssue(next.id);$('#dialog').close();section='sermon';await navigate('editor');toast('이전 주를 보존하고 새 주보를 만들었습니다. 담당과 날짜를 확인해 주세요.');}else $('#new-error').textContent='새 주보를 만들지 못했습니다. 날짜와 연결 상태를 확인해 주세요.';}
 });
 $('#dialog').addEventListener('cancel',e=>{if(!profile||conflict)e.preventDefault();});
 window.addEventListener('beforeunload',e=>{if(pending.size||flushPromise){persistPending();e.preventDefault();e.returnValue='';}});

@@ -16,6 +16,7 @@ let html=await readFile(new URL('index.html',output),'utf8');
 html=html.replace('<script src="app.js"></script>','<script type="module" src="pages-bootstrap.mjs"></script>')
   .replace('공유 주보 연결 중…','이 브라우저의 주보 여는 중…')
   .replace('함께 준비하는 주보','이 브라우저에 저장')
+  .replace('data-storage-label="공유 편집"','data-storage-label="기기 내 저장"')
   .replace('편집자 · 변경 기록 · 담당별 진행 상황','다른 기기·교인과 자동 공유되지 않습니다. PDF로 전달해 주세요.')
   .replace('팀 진행 보기','내 진행 보기')
   .replace('비공개 디자인 프로토타입','GitHub Pages 편집기')

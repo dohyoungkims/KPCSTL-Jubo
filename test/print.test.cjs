@@ -41,3 +41,60 @@ test('new week export preserves the old week and uses the new date and revision'
   assert.equal(initial.issues.length,1);assert.equal(copy.issues[0].date,'2026-10-04');
   assert.ok(r.warnings.every(w=>!w.blocking));
 });
+
+const assertInside=(item)=>{
+  const b=item.bounds,r=item.region,tolerance=.001;
+  assert.ok(b.left>=r.left-tolerance&&b.right<=r.right+tolerance&&b.top>=r.top-tolerance&&b.bottom<=r.bottom+tolerance,
+    `${item.id} on page ${item.page} escapes its text area: ${JSON.stringify({text:item.text,bounds:b,region:r})}`);
+};
+
+test('every default text line stays within its padded print region on all four pages',async()=>{
+  const r=await generate(B.createStore().issues[0]);
+  assert.equal(r.exportable,true);
+  assert.deepEqual([...new Set(r.layout.map(line=>line.page))].sort(),[1,2,3,4]);
+  assert.ok(r.layout.length>70);
+  r.layout.forEach(assertInside);
+});
+
+test('wide glyph ink and an unbroken contact string wrap without losing content',async()=>{
+  const body='⁄'.repeat(141)+'\n'+'contact@'+'w'.repeat(60)+'.org';
+  const i=B.update(B.createStore().issues[0],'announcements.0.body',body),r=await generate(i);
+  assert.equal(r.exportable,true);
+  const lines=r.layout.filter(l=>l.id==='announcements');
+  const firstTitle=lines.findIndex(l=>l.font==='bold'&&l.text.startsWith('1. '));
+  const nextTitle=lines.findIndex((l,n)=>n>firstTitle&&l.font==='bold'&&l.text.startsWith('2. '));
+  const bodyLines=lines.slice(firstTitle+1,nextTitle).filter(l=>l.font==='regular');
+  assert.equal(bodyLines.map(l=>l.text).join(''),body.replaceAll('\n',''));
+  assert.ok(bodyLines.length>=4);
+  r.layout.forEach(assertInside);
+});
+
+test('word-wrap rechecks a wide remainder after a zero-advance prefix',async()=>{
+  const body='‾'.repeat(30)+' '+'W'.repeat(18)+'끝';
+  const i=B.update(B.createStore().issues[0],'announcements.0.body',body),r=await generate(i);
+  assert.equal(r.exportable,true);
+  const lines=r.layout.filter(l=>l.id==='announcements'&&l.font==='regular');
+  assert.equal(lines.slice(0,3).map(l=>l.text).join(''),body.replace(' ',''));
+  r.layout.forEach(assertInside);
+});
+
+test('the actual PDF draw baseline keeps tall fallback glyphs within the heading',async()=>{
+  const draws=[];
+  const recordingLib={...PDFLib,PDFDocument:{load:async bytes=>{
+    const doc=await PDFLib.PDFDocument.load(bytes);
+    doc.getPages().forEach((page,index)=>{
+      const draw=page.drawText.bind(page);
+      page.drawText=(text,options)=>{draws.push({page:index+1,text,...options});return draw(text,options);};
+    });
+    return doc;
+  }}};
+  const i=B.update(B.createStore().issues[0],'sermon.title','Ĵ\nĴ');
+  const r=await P.generate(i,{PDFLib:recordingLib,load});
+  assert.equal(r.exportable,true);
+  const draw=draws.find(d=>d.page===3&&d.text==='Ĵ');
+  assert.ok(draw);
+  // Ĵ in the embedded fallback font has yMax=238 at 256 units/em.
+  // The old constant 0.86-em baseline put this ink above the 76pt inner top.
+  assert.ok(792-draw.y-238/256*draw.size>=76-.001);
+  r.layout.forEach(assertInside);
+});
