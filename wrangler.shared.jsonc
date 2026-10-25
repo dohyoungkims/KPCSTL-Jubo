@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "kpcstl-jubo-api",
+  "account_id": "3932f26ba38a1a1d959c88af5b09374a",
+  "main": "worker/shared-api.mjs",
+  "compatibility_date": "2026-05-15",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "FRONTEND_ORIGIN": "https://dohyoungkims.github.io"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kpcstl-jubo",
+      "database_id": "5c6ea52e-a03f-4e8c-b64f-b63027e7f33b",
+      "migrations_dir": "worker/migrations"
+    }
+  ]
+}
